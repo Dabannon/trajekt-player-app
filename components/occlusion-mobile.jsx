@@ -12,6 +12,19 @@ const MEDIA = (p) => {
   return `/${p}`;
 };
 
+// iOS Safari often shows a black frame until play. Use a real poster image when we
+// have one, and append #t=0.001 so browsers that do decode a preview get a frame.
+const posterOf = (p) => {
+  if (!p || typeof p !== "string") return undefined;
+  if (p.startsWith("blob:") || p.startsWith("data:")) return undefined;
+  return MEDIA(p.replace(/\.(mp4|webm|mov)(\?.*)?$/i, ".jpg"));
+};
+const videoSrc = (p) => {
+  const url = MEDIA(p);
+  if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.includes("#")) return url;
+  return `${url}#t=0.001`;
+};
+
 // Occlusion Training — Train section of the Trajekt player app (mobile).
 
 // Shared tokens/primitives — project copy of the uploaded shared.jsx.
@@ -2339,16 +2352,16 @@ const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = fal
       position: 'relative', width: '100%', aspectRatio: '750 / 429', background: '#000',
       borderRadius: radius, overflow: 'hidden',
     }}>
-      <video ref={hitRef} src={MEDIA(clip.src)} muted playsInline preload="metadata"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+      <video ref={hitRef} src={videoSrc(clip.src)} poster={posterOf(clip.src)} muted playsInline preload="metadata"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }}/>
       {overlay && (
         <div style={{
           position: 'absolute', top: 10, right: 10, width: '21%', aspectRatio: '3 / 4',
           borderRadius: 8, overflow: 'hidden', background: '#000',
           border: '1px solid rgba(235,235,239,0.22)', boxShadow: '0 8px 20px rgba(0,0,0,0.55)',
         }}>
-          <video ref={pitcherRef} src={MEDIA(PITCHER_OVERLAY)} muted playsInline preload="metadata"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block' }}/>
+          <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={posterOf(PITCHER_OVERLAY)} muted playsInline preload="metadata"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block', background: '#000' }}/>
         </div>
       )}
       {manual && !still && (
@@ -2656,16 +2669,16 @@ const StoryPair = ({ clip, children }) => {
         width: '100%', aspectRatio: '4 / 3',
       }}>
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
-          <video ref={hitRef} src={MEDIA(clip.src)} muted playsInline preload="auto"
-            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', transform: 'scale(1.15)' }}/>
+          <video ref={hitRef} src={videoSrc(clip.src)} poster={posterOf(clip.src)} muted playsInline preload="auto"
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', transform: 'scale(1.15)', background: '#000' }}/>
         </div>
         <div style={{
           position: 'absolute', right: 12, bottom: 12, width: 92, aspectRatio: '3 / 4',
           borderRadius: 14, overflow: 'hidden', background: '#000',
           border: '1px solid rgba(235,235,239,0.28)', boxShadow: '0 12px 30px rgba(0,0,0,0.6)',
         }}>
-          <video ref={pitcherRef} src={MEDIA(PITCHER_OVERLAY)} muted playsInline preload="auto"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block' }}/>
+          <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={posterOf(PITCHER_OVERLAY)} muted playsInline preload="auto"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block', background: '#000' }}/>
         </div>
       </div>
 
