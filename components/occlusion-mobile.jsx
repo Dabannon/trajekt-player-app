@@ -2297,49 +2297,90 @@ const useHitSync = (src, manual = false) => {
     const v = hitRef.current;
     if (!v) return;
     let active = false;
+    let ignoreEndedUntil = 0;
+    let seekToken = 0;
+
     const syncPitcher = () => {
       const p = pitcherRef.current;
-      if (!p) return;
+      if (!p || !active) return;
       const hd = v.duration && isFinite(v.duration) && v.duration > 0.2 ? v.duration : 3;
       const pd = p.duration && isFinite(p.duration) && p.duration > 0.2 ? p.duration : hd;
       try { p.currentTime = 0; } catch (_) {}
       p.playbackRate = Math.max(0.1, Math.min(4, pd / hd));
       p.play().catch(() => {});
     };
+
+    const playFromStart = () => {
+      if (!active) return;
+      ignoreEndedUntil = performance.now() + 400;
+      const token = ++seekToken;
+      const start = () => {
+        if (!active || token !== seekToken) return;
+        const playHit = v.play();
+        if (playHit && playHit.catch) playHit.catch(() => {});
+        syncPitcher();
+      };
+      // Seek first, then play after seek completes — avoids the iOS "flash then restart" from
+      // play()+seek racing, and from starting under a poster then revealing.
+      if (v.currentTime > 0.05) {
+        const onSeeked = () => {
+          v.removeEventListener('seeked', onSeeked);
+          start();
+        };
+        v.addEventListener('seeked', onSeeked);
+        try { v.currentTime = 0; } catch (_) { start(); }
+        setTimeout(() => {
+          v.removeEventListener('seeked', onSeeked);
+          if (active && token === seekToken && v.paused) start();
+        }, 250);
+      } else {
+        try { v.currentTime = 0; } catch (_) {}
+        start();
+      }
+    };
+
     const cycle = () => {
       active = true;
-      try { v.currentTime = 0; } catch (_) {}
-      const playHit = v.play();
-      if (playHit && playHit.catch) playHit.catch(() => {});
-      syncPitcher();
+      playFromStart();
     };
+
     const stop = () => {
       active = false;
+      seekToken += 1;
       v.pause();
       const p = pitcherRef.current;
       if (p) p.pause();
     };
+
     const onEnded = () => {
       if (!active) return;
-      cycle();
+      if (performance.now() < ignoreEndedUntil) return;
+      // Genuine end-of-clip → loop
+      playFromStart();
     };
+
     v.addEventListener('ended', onEnded);
     ctl.current = { cycle, stop };
     if (manual) {
       return () => {
         active = false;
+        seekToken += 1;
         v.removeEventListener('ended', onEnded);
       };
     }
     const io = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) cycle();
-      else stop();
+      if (e.isIntersecting) {
+        if (!active) cycle();
+      } else {
+        stop();
+      }
     }, { threshold: 0.4 });
     const attach = () => io.observe(v);
     if (v.readyState >= 1) attach();
     else v.addEventListener('loadedmetadata', attach, { once: true });
     return () => {
       active = false;
+      seekToken += 1;
       io.disconnect();
       v.removeEventListener('ended', onEnded);
     };
@@ -2348,8 +2389,8 @@ const useHitSync = (src, manual = false) => {
 };
 
 // Hit clip with the pitcher feed picture-in-picture, top right.
-// On iOS WebKit (Safari + Chrome), <video> often paints black until play even with
-// poster= / #t=. For still cards and idle manual players, show a real <img> instead.
+// On iOS WebKit (Safari + Chrome), <video> often paints black until play — use <img>
+// posters while idle. Never start playback under the poster (that causes a visible restart).
 const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = false, children }) => {
   const { hitRef, pitcherRef, ctl } = useHitSync(clip.src, manual || still);
   const [playing, setPlaying] = React.useState(false);
@@ -2358,13 +2399,33 @@ const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = fal
   const pitcherPoster = posterOf(PITCHER_OVERLAY);
   const showPoster = still || (manual && !playing);
   self.current.stop = () => { ctl.current && ctl.current.stop(); setPlaying(false); };
+
   const toggle = () => {
-    if (playing) { self.current.stop(); if (clipBus.current === self.current) clipBus.current = null; return; }
+    if (playing) {
+      self.current.stop();
+      if (clipBus.current === self.current) clipBus.current = null;
+      return;
+    }
     if (clipBus.current && clipBus.current !== self.current) clipBus.current.stop();
     clipBus.current = self.current;
-    ctl.current && ctl.current.cycle();
+    // Hide poster first; playback starts in the effect after paint.
     setPlaying(true);
   };
+
+  React.useEffect(() => {
+    if (!playing || still) return;
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) ctl.current && ctl.current.cycle();
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [playing, still]);
+
   React.useEffect(() => () => { if (clipBus.current === self.current) clipBus.current = null; }, []);
   return (
     <div style={{
