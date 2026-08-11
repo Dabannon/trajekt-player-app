@@ -2334,10 +2334,15 @@ const useHitSync = (src, manual = false) => {
 };
 
 // Hit clip with the pitcher feed picture-in-picture, top right.
+// On iOS WebKit (Safari + Chrome), <video> often paints black until play even with
+// poster= / #t=. For still cards and idle manual players, show a real <img> instead.
 const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = false, children }) => {
   const { hitRef, pitcherRef, ctl } = useHitSync(clip.src, manual || still);
   const [playing, setPlaying] = React.useState(false);
   const self = React.useRef({});
+  const hitPoster = posterOf(clip.src);
+  const pitcherPoster = posterOf(PITCHER_OVERLAY);
+  const showPoster = still || (manual && !playing);
   self.current.stop = () => { ctl.current && ctl.current.stop(); setPlaying(false); };
   const toggle = () => {
     if (playing) { self.current.stop(); if (clipBus.current === self.current) clipBus.current = null; return; }
@@ -2352,23 +2357,53 @@ const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = fal
       position: 'relative', width: '100%', aspectRatio: '750 / 429', background: '#000',
       borderRadius: radius, overflow: 'hidden',
     }}>
-      <video ref={hitRef} src={videoSrc(clip.src)} poster={posterOf(clip.src)} muted playsInline preload="metadata"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }}/>
+      {still ? (
+        hitPoster ? (
+          <img src={hitPoster} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+        ) : null
+      ) : (
+        <>
+          <video ref={hitRef} src={videoSrc(clip.src)} poster={hitPoster} muted playsInline preload="metadata"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }}/>
+          {showPoster && hitPoster && (
+            <img src={hitPoster} alt="" style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+              pointerEvents: 'none', zIndex: 1,
+            }}/>
+          )}
+        </>
+      )}
       {overlay && (
         <div style={{
           position: 'absolute', top: 10, right: 10, width: '21%', aspectRatio: '3 / 4',
-          borderRadius: 8, overflow: 'hidden', background: '#000',
+          borderRadius: 8, overflow: 'hidden', background: '#000', zIndex: 2,
           border: '1px solid rgba(235,235,239,0.22)', boxShadow: '0 8px 20px rgba(0,0,0,0.55)',
         }}>
-          <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={posterOf(PITCHER_OVERLAY)} muted playsInline preload="metadata"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block', background: '#000' }}/>
+          {still ? (
+            pitcherPoster ? (
+              <img src={pitcherPoster} alt="" style={{
+                width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block',
+              }}/>
+            ) : null
+          ) : (
+            <>
+              <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={pitcherPoster} muted playsInline preload="metadata"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block', background: '#000' }}/>
+              {showPoster && pitcherPoster && (
+                <img src={pitcherPoster} alt="" style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover', objectPosition: '55% 45%', pointerEvents: 'none',
+                }}/>
+              )}
+            </>
+          )}
         </div>
       )}
       {manual && !still && (
         <button onClick={toggle} aria-label={playing ? 'Pause clip' : 'Play clip'} style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none', cursor: 'pointer',
           background: playing ? 'transparent' : 'rgba(0,0,0,0.28)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', padding: 0,
+          alignItems: 'center', justifyContent: 'center', padding: 0, zIndex: 3,
         }}>
           {!playing && (
             <span style={{
