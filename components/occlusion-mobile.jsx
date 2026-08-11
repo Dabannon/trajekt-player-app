@@ -1486,7 +1486,7 @@ const DrillM = ({ cfg, onComplete, onExit, cast, onCast }) => {
   const cut = React.useCallback(() => {
     clearTimeout(cutTimer.current);
     const v = videoRef.current;
-    if (v) { try { v.pause(); } catch (_) {} } // hold on the frame the cut landed on
+    if (v) { try { v.pause(); } catch (_) {} } // hold on the last frame
     setStage(st => {
       if (st !== 'playing') return st;
       callStart.current = Date.now();
@@ -1495,21 +1495,19 @@ const DrillM = ({ cfg, onComplete, onExit, cast, onCast }) => {
   }, []);
   React.useEffect(() => () => clearTimeout(cutTimer.current), []);
 
-  // Play the delivery: seek to the windowed start so the arm action and release
-  // are what the hitter sees, then cut.
+  // Play the full delivery through to the end of the clip, then prompt for the call.
   const play = () => {
     setStage('playing');
     clearTimeout(cutTimer.current);
     const v = videoRef.current;
-    if (!v) { cutTimer.current = setTimeout(cut, clip.ms); return; }
+    if (!v) return;
     const go = () => {
-      try { v.currentTime = clip.start; } catch (_) {}
-      cutTimer.current = setTimeout(cut, clip.ms);
+      try { v.currentTime = 0; } catch (_) {}
       v.play().catch(() => {});
     };
     try { v.pause(); } catch (_) {}
     if (v.readyState >= 1) go();
-    else { v.addEventListener('loadeddata', go, { once: true }); cutTimer.current = setTimeout(cut, clip.ms + 800); }
+    else v.addEventListener('loadeddata', go, { once: true });
   };
 
   const [count, setCount] = React.useState(null);
@@ -1649,7 +1647,6 @@ const DrillM = ({ cfg, onComplete, onExit, cast, onCast }) => {
         <video ref={videoRef} src={blobUrls[current.video] || undefined} playsInline muted preload="auto"
           data-casting={cast ? 'true' : undefined}
           onEnded={cut} onError={cut}
-          onTimeUpdate={(e) => { if (e.currentTarget.currentTime >= startRef.current + clip.ms / 1000) cut(); }}
           style={{
             width: '100%', height: '100%', objectFit: 'cover',
             opacity: stage === 'playing' ? 1 : 0.14,
