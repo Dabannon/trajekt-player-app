@@ -12,18 +12,14 @@ const MEDIA = (p) => {
   return `/${p}`;
 };
 
-// iOS Safari often shows a black frame until play. Use a real poster image when we
-// have one, and append #t=0.001 so browsers that do decode a preview get a frame.
+// iOS Safari/Chrome often show a black frame until play. Prefer real poster images;
+// keep video URLs clean (no #t= fragment) so playback isn't truncated or restarted.
 const posterOf = (p) => {
   if (!p || typeof p !== "string") return undefined;
   if (p.startsWith("blob:") || p.startsWith("data:")) return undefined;
   return MEDIA(p.replace(/\.(mp4|webm|mov)(\?.*)?$/i, ".jpg"));
 };
-const videoSrc = (p) => {
-  const url = MEDIA(p);
-  if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.includes("#")) return url;
-  return `${url}#t=0.001`;
-};
+const videoSrc = (p) => MEDIA(p);
 
 // Occlusion Training — Train section of the Trajekt player app (mobile).
 
@@ -2300,35 +2296,53 @@ const useHitSync = (src, manual = false) => {
   React.useEffect(() => {
     const v = hitRef.current;
     if (!v) return;
-    let timers = [];
-    const clear = () => { timers.forEach(clearTimeout); timers = []; };
-    const cycle = () => {
-      clear();
+    let active = false;
+    const syncPitcher = () => {
       const p = pitcherRef.current;
+      if (!p) return;
       const hd = v.duration && isFinite(v.duration) && v.duration > 0.2 ? v.duration : 3;
+      const pd = p.duration && isFinite(p.duration) && p.duration > 0.2 ? p.duration : hd;
+      try { p.currentTime = 0; } catch (_) {}
+      p.playbackRate = Math.max(0.1, Math.min(4, pd / hd));
+      p.play().catch(() => {});
+    };
+    const cycle = () => {
+      active = true;
       try { v.currentTime = 0; } catch (_) {}
-      v.play().catch(() => {});
-      if (p) {
-        const pd = p.duration && isFinite(p.duration) && p.duration > 0.2 ? p.duration : hd;
-        try { p.currentTime = 0; } catch (_) {}
-        p.playbackRate = Math.max(0.1, Math.min(4, pd / hd));
-        p.play().catch(() => {});
-      }
-      timers.push(setTimeout(cycle, hd * 1000 + 60));
+      const playHit = v.play();
+      if (playHit && playHit.catch) playHit.catch(() => {});
+      syncPitcher();
     };
     const stop = () => {
-      clear();
+      active = false;
       v.pause();
       const p = pitcherRef.current;
       if (p) p.pause();
     };
+    const onEnded = () => {
+      if (!active) return;
+      cycle();
+    };
+    v.addEventListener('ended', onEnded);
     ctl.current = { cycle, stop };
-    if (manual) return () => { clear(); };
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) cycle(); else stop(); }, { threshold: 0.4 });
+    if (manual) {
+      return () => {
+        active = false;
+        v.removeEventListener('ended', onEnded);
+      };
+    }
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) cycle();
+      else stop();
+    }, { threshold: 0.4 });
     const attach = () => io.observe(v);
     if (v.readyState >= 1) attach();
     else v.addEventListener('loadedmetadata', attach, { once: true });
-    return () => { io.disconnect(); clear(); };
+    return () => {
+      active = false;
+      io.disconnect();
+      v.removeEventListener('ended', onEnded);
+    };
   }, [src, manual]);
   return { hitRef, pitcherRef, ctl };
 };
@@ -2363,7 +2377,7 @@ const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = fal
         ) : null
       ) : (
         <>
-          <video ref={hitRef} src={videoSrc(clip.src)} poster={hitPoster} muted playsInline preload="metadata"
+          <video ref={hitRef} src={videoSrc(clip.src)} poster={hitPoster} muted playsInline preload="auto"
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', background: '#000' }}/>
           {showPoster && hitPoster && (
             <img src={hitPoster} alt="" style={{
@@ -2387,7 +2401,7 @@ const HitClip = ({ clip, radius = 0, overlay = true, manual = false, still = fal
             ) : null
           ) : (
             <>
-              <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={pitcherPoster} muted playsInline preload="metadata"
+              <video ref={pitcherRef} src={videoSrc(PITCHER_OVERLAY)} poster={pitcherPoster} muted playsInline preload="auto"
                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '55% 45%', display: 'block', background: '#000' }}/>
               {showPoster && pitcherPoster && (
                 <img src={pitcherPoster} alt="" style={{
