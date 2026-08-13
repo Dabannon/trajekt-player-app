@@ -23,6 +23,9 @@ const videoSrc = (p) => MEDIA(p);
 
 // Occlusion Training — Train section of the Trajekt player app (mobile).
 
+// Temporarily hide Reaction Time (tap-the-dots) from Train / Home.
+const ENABLE_REACTION_TIME = false;
+
 // Shared tokens/primitives — project copy of the uploaded shared.jsx.
 // Edits: Inter for both text and numerics.
 
@@ -970,7 +973,7 @@ const USAGE_7D = [
 const USAGE_SERIES = [
   { k: 'arc', label: 'Arc', c: '#3E63DD' },
   { k: 'pr',  label: 'Pitch rec.', c: '#5C82E8' },
-  { k: 'rx',  label: 'Reaction', c: '#8FAEF5' },
+  ...(ENABLE_REACTION_TIME ? [{ k: 'rx',  label: 'Reaction', c: '#8FAEF5' }] : []),
   { k: 'iq',  label: 'Game IQ', c: '#C2D6FA' },
 ];
 
@@ -1042,7 +1045,7 @@ const BestEfforts = () => {
 const READY_DRIVERS = [
   { label: 'Arc volume', pct: 82, detail: '238 of 290 pitches', cta: 'Book an Arc session · 20 min' },
   { label: 'Pitch recognition', pct: 54, detail: '120 of 220 reps', cta: 'Train pitch recognition · 10 min' },
-  { label: 'Reaction time', pct: 61, detail: '70 of 115 targets', cta: 'Run a reaction time set · 5 min' },
+  ...(ENABLE_REACTION_TIME ? [{ label: 'Reaction time', pct: 61, detail: '70 of 115 targets', cta: 'Run a reaction time set · 5 min' }] : []),
   { label: 'Game IQ', pct: 38, detail: '54 of 140 questions', cta: 'Answer Game IQ questions · 10 min' },
 ];
 const readyBand = (n) => n >= 70 ? { c: '#30A46C', name: 'Game ready' }
@@ -2123,8 +2126,8 @@ const MY_PCTL = 78;
 const RANK_MODES = [
   { id: 'occ', label: 'Pitch Rec.', title: 'Pitch recognition percentile', blurb: 'read pitches better than',
     skills: [['Location accuracy', 'location'], ['Pitch identification', 'pitchId'], ['Decision speed', 'speed']] },
-  { id: 'rx', label: 'Reaction', title: 'Reaction time percentile', blurb: 'react faster than',
-    skills: [['Average reaction', 'location'], ['Best reaction', 'pitchId'], ['Consistency', 'speed']] },
+  ...(ENABLE_REACTION_TIME ? [{ id: 'rx', label: 'Reaction', title: 'Reaction time percentile', blurb: 'react faster than',
+    skills: [['Average reaction', 'location'], ['Best reaction', 'pitchId'], ['Consistency', 'speed']] }] : []),
   { id: 'iq', label: 'Game IQ', title: 'Game IQ percentile', blurb: 'read the game better than',
     skills: [['Base running reads', 'location'], ['Count awareness', 'pitchId'], ['Answer speed', 'speed']] },
 ];
@@ -3096,9 +3099,9 @@ const MODE_CARDS = [
   { id: 'occ', icon: 'eye', name: 'Pitch Recognition', c: '#3E63DD',
     sub: 'The clip cuts at release. Call the location, call the pitch.',
     trains: 'Trains: pitch ID · zone reads', len: '5–10 min' },
-  { id: 'rx', icon: 'bolt', name: 'Reaction Time', c: '#5C82E8',
+  ...(ENABLE_REACTION_TIME ? [{ id: 'rx', icon: 'bolt', name: 'Reaction Time', c: '#5C82E8',
     sub: 'Targets flash on the screen. Tap them as fast as your hands go.',
-    trains: 'Trains: raw reaction speed', len: '3–5 min' },
+    trains: 'Trains: raw reaction speed', len: '3–5 min' }] : []),
   { id: 'iq', icon: 'sparkle', name: 'Game IQ', c: '#8FAEF5',
     sub: 'Base running reads and counts. The decisions you get once a game.',
     trains: 'Trains: in-game decisions', len: '5 min' },
@@ -3141,18 +3144,19 @@ const ModeCard = ({ card, meta, onClick }) => (
 );
 
 const TrainPickerM = ({ user, tabs, cast, onCast, onPick, onRanks, totals }) => {
-  const all = totals.occ.pts + totals.rx.pts + totals.iq.pts;
+  const all = totals.occ.pts + (ENABLE_REACTION_TIME ? totals.rx.pts : 0) + totals.iq.pts;
   const metaOf = (t) => t.n ? `${t.n} sessions · ${t.pts.toLocaleString()} pts` : 'Not run yet';
   const meta = { occ: metaOf(totals.occ), rx: metaOf(totals.rx), iq: metaOf(totals.iq) };
   const split = [
     { id: 'occ', label: 'Pitch Recognition', pts: totals.occ.pts, c: '#3E63DD' },
-    { id: 'rx',  label: 'Reaction Time',     pts: totals.rx.pts,  c: '#7C9CF0' },
+    ...(ENABLE_REACTION_TIME ? [{ id: 'rx',  label: 'Reaction Time',     pts: totals.rx.pts,  c: '#7C9CF0' }] : []),
     { id: 'iq',  label: 'Game IQ',           pts: totals.iq.pts,  c: '#B8CDF8' },
   ];
   const [scoreOpen, setScoreOpen] = React.useState(false);
+  const modeCount = MODE_CARDS.length;
   return (
     <Page tabs={tabs} user={user} cast={cast} onCast={onCast}>
-      <PageHead title="Train" sub="Three ways to sharpen up"/>
+      <PageHead title="Train" sub={modeCount === 1 ? 'Sharpen up' : `${modeCount === 2 ? 'Two' : 'Three'} ways to sharpen up`}/>
       <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <div style={{
           background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16,
@@ -3188,7 +3192,9 @@ const TrainPickerM = ({ user, tabs, cast, onCast, onPick, onRanks, totals }) => 
 
           {scoreOpen && (
             <div>
-              <div style={{ fontSize: 12, color: T.fg3, marginTop: 16, lineHeight: 1.5 }}>All three modes feed one score and one percentile.</div>
+              <div style={{ fontSize: 12, color: T.fg3, marginTop: 16, lineHeight: 1.5 }}>
+                {ENABLE_REACTION_TIME ? 'All three modes feed one score and one percentile.' : 'Modes feed one score and one percentile.'}
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
                 {split.map(m => (
                   <span key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -4037,19 +4043,19 @@ const AppMobile = ({ defaultDifficulty = 'Standard', skipAuth = false }) => {
     </div>
   );
 
-  if (mode === 'rx-setup') return (
+  if (ENABLE_REACTION_TIME && mode === 'rx-setup') return (
     <div data-screen-label="Reaction setup" style={{ position: 'absolute', inset: 0 }}>
       <ReactionSetupM cfg={rxCfg} setCfg={setRxCfg} last={rxSessions[0]}
         onBack={() => setMode('tabs')} onStart={() => setMode('rx-drill')}/>
     </div>
   );
-  if (mode === 'rx-drill') return (
+  if (ENABLE_REACTION_TIME && mode === 'rx-drill') return (
     <div data-screen-label="Reaction drill" style={{ position: 'absolute', inset: 0 }}>
       <ReactionDrillM cfg={rxCfg} onExit={() => setMode('rx-setup')}
         onComplete={(r) => { setRxResult(r); saveRx(r); setMode('rx-recap'); }}/>
     </div>
   );
-  if (mode === 'rx-recap') return (
+  if (ENABLE_REACTION_TIME && mode === 'rx-recap') return (
     <div data-screen-label="Reaction recap" style={{ position: 'absolute', inset: 0 }}>
       <ReactionRecapM result={rxResult} onAgain={() => setMode('rx-drill')}
         onDone={() => { setMode('tabs'); setTab('train'); setTrainView('picker'); }}/>
@@ -4118,8 +4124,8 @@ const AppMobile = ({ defaultDifficulty = 'Standard', skipAuth = false }) => {
         onRanks={() => setMode('ranks')}
         onPick={(id) => {
           if (id === 'occ') setTrainView('occ');
-          else if (id === 'rx') setMode('rx-setup');
-          else setMode('iq-setup');
+          else if (id === 'rx' && ENABLE_REACTION_TIME) setMode('rx-setup');
+          else if (id === 'iq') setMode('iq-setup');
         }}/>
       {castSheet}
     </div>
